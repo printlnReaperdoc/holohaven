@@ -27,6 +27,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
+console.log('✅ Firebase connected:', app.name);
+
 // --- Google Sign-In helper ---
 // Accepts a Google ID token (JWT) and signs in with Firebase using that token.
 async function signInWithGoogleIdToken(idToken) {

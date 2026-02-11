@@ -107,17 +107,20 @@ router.post("/:id/images", authMiddleware, upload.single("image"), async (req, r
 // GET single product
 router.get("/:id", async (req, res) => {
   try {
+    // Validate MongoDB ObjectId format
+    if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(404).json({ error: "Product not found" });
+    }
+
     const product = await Product.findById(req.params.id)
-      .populate("uploadedBy", "username profilePicture")
-      .populate({
-        path: "reviews",
-        populate: { path: "userId", select: "username profilePicture" },
-      });
+      .populate("uploadedBy", "username profilePicture");
     if (!product) return res.status(404).json({ error: "Product not found" });
     const convertedProduct = convertProductPrice(product);
+    console.log(`📦 GET /products/:${req.params.id} - Product found: ${product.name}`);
     res.json(convertedProduct);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("❌ Error fetching product:", error);
+    res.status(404).json({ error: "Product not found" });
   }
 });
 
