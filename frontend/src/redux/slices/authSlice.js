@@ -125,17 +125,58 @@ export const updateProfile = createAsyncThunk(
 
 export const uploadProfilePicture = createAsyncThunk(
   'auth/uploadProfilePicture',
-  async (formData) => {
-    const token = await getToken();
-    const response = await axios.post(
-      `${API_URL}/users/profile-picture`,
-      formData,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: AXIOS_TIMEOUT,
+  async (imageUri, { rejectWithValue }) => {
+    try {
+      const token = await getToken();
+      
+      console.log('uploadProfilePicture: Starting upload for URI:', imageUri);
+      
+      // Create FormData with the image URI directly
+      const formData = new FormData();
+      
+      // For React Native, we pass the URI directly
+      formData.append('profilePicture', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: 'profile.jpg',
+      });
+
+      console.log('uploadProfilePicture: FormData created, sending to server');
+      
+      // Upload to backend with proper timeout
+      const uploadResponse = await Promise.race([
+        fetch(`${API_URL}/users/profile-picture`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Upload timeout after 30s')), 30000)
+        ),
+      ]);
+
+      console.log('uploadProfilePicture: Response received, status:', uploadResponse.status);
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error('uploadProfilePicture: Error response:', errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          return rejectWithValue(errorData || { error: 'Upload failed with status ' + uploadResponse.status });
+        } catch (e) {
+          return rejectWithValue({ error: errorText || ('Upload failed with status ' + uploadResponse.status) });
+        }
       }
-    );
-    return response.data;
+
+      const data = await uploadResponse.json();
+      console.log('uploadProfilePicture: Upload successful, new URL:', data.profilePicture);
+      return data;
+    } catch (error) {
+      console.error('uploadProfilePicture: Error caught:', error.message);
+      return rejectWithValue({ error: 'Upload error: ' + error.message });
+    }
   }
 );
 
@@ -224,8 +265,18 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload?.error || 'Failed to update profile';
       })
+      .addCase(uploadProfilePicture.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(uploadProfilePicture.fulfilled, (state, action) => {
+        state.loading = false;
         state.user = action.payload;
+        state.error = null;
+      })
+      .addCase(uploadProfilePicture.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload?.error || 'Failed to upload profile picture';
       });
   },
 });

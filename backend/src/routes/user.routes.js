@@ -106,12 +106,29 @@ router.put("/profile", authMiddleware, async (req, res) => {
 router.post(
   "/profile-picture",
   authMiddleware,
-  upload.single("profilePicture"),
+  (req, res, next) => {
+    upload.single("profilePicture")(req, res, (err) => {
+      if (err) {
+        console.error('Multer error:', err.message);
+        return res.status(400).json({ error: 'File upload error: ' + err.message });
+      }
+      next();
+    });
+  },
   async (req, res) => {
     try {
+      console.log('profilePictureRoute: Request received from user:', req.userId);
+      
       if (!req.file) {
+        console.error('profilePictureRoute: No file in request');
         return res.status(400).json({ error: "No file uploaded" });
       }
+
+      console.log('profilePictureRoute: File uploaded to Cloudinary:', {
+        path: req.file.path,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      });
 
       const user = await User.findByIdAndUpdate(
         req.userId,
@@ -119,9 +136,17 @@ router.post(
         { new: true }
       ).select("-passwordHash");
 
+      if (!user) {
+        console.error('profilePictureRoute: User not found:', req.userId);
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      console.log('profilePictureRoute: User updated successfully, new URL:', user.profilePicture);
+
       res.json(user);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      console.error('profilePictureRoute: Error:', error);
+      res.status(500).json({ error: 'Server error: ' + error.message });
     }
   }
 );

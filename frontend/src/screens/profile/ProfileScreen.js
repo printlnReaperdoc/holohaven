@@ -19,12 +19,16 @@ import {
   logout,
 } from '../../redux/slices/authSlice';
 
+// Import MediaType from expo-image-picker if available
+const MEDIA_TYPES = ImagePicker.MediaType?.Images || ['images'];
+
 const ProfileScreen = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { user, loading } = useSelector((state) => state.auth);
+  const { user, loading, error } = useSelector((state) => state.auth);
   const [imageError, setImageError] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editTab, setEditTab] = useState('basic'); // 'basic' or 'security'
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
   
   // Basic info
   const [fullName, setFullName] = useState(user?.fullName || '');
@@ -64,47 +68,70 @@ const ProfileScreen = ({ navigation }) => {
 
     if (!choose) return;
 
-    if (choose === 'camera') {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Camera permission required');
+    try {
+      setIsUploadingPicture(true);
+      let result;
+
+      if (choose === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert('Permission Denied', 'Camera permission is required to take a photo');
+          setIsUploadingPicture(false);
+          return;
+        }
+
+        result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+
+        console.log('Camera result:', result);
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: MEDIA_TYPES,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+
+        console.log('Library result:', result);
+      }
+
+      if (result.canceled) {
+        console.log('User cancelled image selection');
+        setIsUploadingPicture(false);
         return;
       }
 
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled) {
-        const formData = new FormData();
-        formData.append('profilePicture', {
-          uri: result.assets[0].uri,
-          type: 'image/jpeg',
-          name: 'profile.jpg',
-        });
-
-        dispatch(uploadProfilePicture(formData));
+      if (!result.assets || !result.assets[0]) {
+        console.error('No assets found in result');
+        Alert.alert('Error', 'Failed to get image');
+        setIsUploadingPicture(false);
+        return;
       }
-    } else {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
 
-      if (!result.canceled) {
-        const formData = new FormData();
-        formData.append('profilePicture', {
-          uri: result.assets[0].uri,
-          type: 'image/jpeg',
-          name: 'profile.jpg',
-        });
+      const imageUri = result.assets[0].uri;
+      console.log('handlePickImage: Image selected, URI:', imageUri);
+      console.log('handlePickImage: Starting upload...');
 
-        dispatch(uploadProfilePicture(formData));
+      const response = await dispatch(uploadProfilePicture(imageUri));
+      
+      if (uploadProfilePicture.fulfilled.match(response)) {
+        console.log('handlePickImage: Upload succeeded');
+        console.log('handlePickImage: New URL:', response.payload?.profilePicture);
+        Alert.alert('Success', 'Profile picture updated successfully');
+        setImageError(false);
+      } else {
+        console.error('handlePickImage: Upload failed with payload:', response.payload);
+        const errorMsg = response.payload?.error || 'Failed to upload profile picture';
+        Alert.alert('Upload Failed', errorMsg);
       }
+    } catch (err) {
+      console.error('handlePickImage: Exception caught:', err);
+      Alert.alert('Error', err.message || 'An error occurred while uploading the image');
+    } finally {
+      setIsUploadingPicture(false);
     }
   };
 
@@ -209,32 +236,43 @@ const ProfileScreen = ({ navigation }) => {
     <ScrollView style={styles.container}>
       {/* Profile Header */}
       <View style={styles.headerSection}>
-        <TouchableOpacity onPress={handlePickImage}>
-          {user?.profilePicture && !imageError ? (
-            <Image
-              source={{ uri: user.profilePicture }}
-              style={styles.profileImage}
-              onError={() => setImageError(true)}
-            />
-          ) : user?.profilePicture && imageError ? (
-            <Image
-              source={require('../../../assets/default-profile-picture.jpg')}
-              style={styles.profileImage}
-            />
-          ) : user?.username ? (
-            <View style={styles.profileImagePlaceholder}>
-              <Text style={styles.profileImagePlaceholderText}>
-                {user?.username?.charAt(0).toUpperCase() || 'U'}
-              </Text>
+        <TouchableOpacity onPress={handlePickImage} disabled={isUploadingPicture}>
+          <View style={styles.profileImageContainer}>
+            {user?.profilePicture && !imageError ? (
+              <Image
+                source={{ uri: `${user.profilePicture}?t=${Date.now()}` }}
+                style={styles.profileImage}
+                onError={() => {
+                  console.log('Image failed to load:', user.profilePicture);
+                  setImageError(true);
+                }}
+                onLoad={() => console.log('Image loaded successfully')}
+              />
+            ) : user?.profilePicture && imageError ? (
+              <Image
+                source={require('../../../assets/default-profile-picture.jpg')}
+                style={styles.profileImage}
+              />
+            ) : user?.username ? (
+              <View style={styles.profileImagePlaceholder}>
+                <Text style={styles.profileImagePlaceholderText}>
+                  {user?.username?.charAt(0).toUpperCase() || 'U'}
+                </Text>
+              </View>
+            ) : (
+              <Image
+                source={require('../../../assets/default-profile-picture.jpg')}
+                style={styles.profileImage}
+              />
+            )}
+            {isUploadingPicture && (
+              <View style={styles.uploadingOverlay}>
+                <ActivityIndicator size="large" color="#FFF" />
+              </View>
+            )}
+            <View style={styles.editImageOverlay}>
+              <Text style={styles.editImageText}>📷</Text>
             </View>
-          ) : (
-            <Image
-              source={require('../../../assets/default-profile-picture.jpg')}
-              style={styles.profileImage}
-            />
-          )}
-          <View style={styles.editImageOverlay}>
-            <Text style={styles.editImageText}>📷</Text>
           </View>
         </TouchableOpacity>
 
@@ -457,11 +495,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 8,
     borderBottomColor: '#F3F4F6',
   },
+  profileImageContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
   profileImage: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    marginBottom: 16,
   },
   profileImagePlaceholder: {
     width: 100,
@@ -470,7 +511,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#8B5CF6',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
   },
   profileImagePlaceholderText: {
     color: '#FFF',
@@ -479,7 +519,7 @@ const styles = StyleSheet.create({
   },
   editImageOverlay: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 0,
     right: 0,
     backgroundColor: '#FFF',
     width: 36,
@@ -489,6 +529,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#8B5CF6',
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 50,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   editImageText: {
     fontSize: 18,
