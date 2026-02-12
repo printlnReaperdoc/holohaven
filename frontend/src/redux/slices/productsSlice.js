@@ -44,6 +44,30 @@ export const createProduct = createAsyncThunk(
   }
 );
 
+export const updateProduct = createAsyncThunk(
+  'products/updateProduct',
+  async ({ productId, formData }, { rejectWithValue }) => {
+    try {
+      const response = await axiosInstance.put(`/products/${productId}`, formData);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || { error: error.message });
+    }
+  }
+);
+
+export const deleteProduct = createAsyncThunk(
+  'products/deleteProduct',
+  async (productId, { rejectWithValue }) => {
+    try {
+      await axiosInstance.delete(`/products/${productId}`);
+      return productId;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || { error: error.message });
+    }
+  }
+);
+
 export const fetchCategories = createAsyncThunk(
   'products/fetchCategories',
   async () => {
@@ -127,6 +151,34 @@ const productsSlice = createSlice({
         state.items.unshift(action.payload);
       })
       .addCase(createProduct.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || action.error.message;
+      })
+      .addCase(updateProduct.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateProduct.fulfilled, (state, action) => {
+        state.loading = false;
+        const index = state.items.findIndex(p => p._id === action.payload._id);
+        if (index !== -1) {
+          state.items[index] = action.payload;
+        }
+        state.currentProduct = action.payload;
+      })
+      .addCase(updateProduct.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload || action.error.message;
+      })
+      .addCase(deleteProduct.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteProduct.fulfilled, (state, action) => {
+        state.loading = false;
+        state.items = state.items.filter(p => p._id !== action.payload);
+      })
+      .addCase(deleteProduct.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || action.error.message;
       })

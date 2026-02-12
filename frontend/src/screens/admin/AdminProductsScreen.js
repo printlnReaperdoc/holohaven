@@ -14,10 +14,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchProducts, createProduct } from '../../redux/slices/productsSlice';
+import { fetchProducts, createProduct, updateProduct, deleteProduct } from '../../redux/slices/productsSlice';
 import { axiosInstance } from '../../api/api';
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { uploadProductImageToCloudinary } from '../../utils/cloudinaryUpload';
 
 const DEFAULT_IMAGE = require('../../../assets/default-product-image.jpg');
 
@@ -46,6 +47,13 @@ const AdminProductsScreen = ({ navigation }) => {
     try {
       const response = await axiosInstance.get('/products');
       console.log('Products loaded:', response.data.length);
+      
+      // Log first product image for debugging
+      if (response.data.length > 0) {
+        console.log('First product image:', response.data[0].image);
+        console.log('All product images:', response.data.map(p => ({ name: p.name, image: p.image })));
+      }
+      
       setTableData(response.data);
     } catch (error) {
       console.error('Error loading products:', error.message);
@@ -67,6 +75,25 @@ const AdminProductsScreen = ({ navigation }) => {
     setEditingId(null);
   };
 
+  // Validate and handle price input - only allow numbers and one decimal point
+  const handlePriceChange = (text) => {
+    // Remove any non-numeric characters except decimal point
+    let cleaned = text.replace(/[^0-9.]/g, '');
+    
+    // Ensure only one decimal point
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      cleaned = parts[0] + '.' + parts[1];
+    }
+    
+    // Don't allow leading zeros (except "0" itself or "0.xx")
+    if (cleaned.startsWith('0') && cleaned.length > 1 && !cleaned.startsWith('0.')) {
+      cleaned = cleaned.substring(1);
+    }
+    
+    setFormData({ ...formData, price: cleaned });
+  };
+
   const pickImageFromGallery = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -76,7 +103,7 @@ const AdminProductsScreen = ({ navigation }) => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Image,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -84,6 +111,12 @@ const AdminProductsScreen = ({ navigation }) => {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const imageUri = result.assets[0].uri;
+        console.log('Gallery image selected:', imageUri);
+        console.log('Image picker result:', {
+          uri: imageUri,
+          mimeType: result.assets[0].mimeType,
+          type: result.assets[0].type,
+        });
         setFormData({ ...formData, image: imageUri });
         Alert.alert('Success', 'Image selected');
       }
@@ -102,6 +135,7 @@ const AdminProductsScreen = ({ navigation }) => {
       }
 
       const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -109,6 +143,7 @@ const AdminProductsScreen = ({ navigation }) => {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const imageUri = result.assets[0].uri;
+        console.log('Camera image captured:', imageUri);
         setFormData({ ...formData, image: imageUri });
         Alert.alert('Success', 'Photo captured');
       }
@@ -119,70 +154,94 @@ const AdminProductsScreen = ({ navigation }) => {
   };
 
   const handleSaveProduct = async () => {
+    // Validate required fields
     if (!formData.name || !formData.price || !formData.category) {
       Alert.alert('Error', 'Name, price, and category are required');
       return;
     }
 
+    // Validate price is a valid number
+    const priceValue = parseFloat(formData.price);
+    if (isNaN(priceValue) || priceValue <= 0) {
+      Alert.alert('Error', 'Price must be a valid positive number');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Check if we have a local image to upload
+      let imageUrl = formData.image;
+      
+      // Check if we have a local image to upload - if so, upload to Cloudinary first
       if (formData.image && formData.image.startsWith('file://')) {
-        // Use FormData for file uploads
-        const formDataToSend = new FormData();
-        formDataToSend.append('name', formData.name);
-        formDataToSend.append('price', parseFloat(formData.price));
-        formDataToSend.append('category', formData.category);
-        formDataToSend.append('description', formData.description);
-        formDataToSend.append('vtuberTag', formData.vtuberTag);
-
-        // For React Native, append file with uri property
-        formDataToSend.append('image', {
-          uri: formData.image,
-          type: 'image/jpeg',
-          name: 'product-image.jpg',
-        });
-        
-        console.log('📸 Uploading local image via FormData:', formData.image);
-
-        // Use axios with proper FormData handling for React Native
-        if (editingId) {
-          await axiosInstance.put(`/products/${editingId}`, formDataToSend);
-          Alert.alert('Success', 'Product updated');
-        } else {
-          await axiosInstance.post('/products', formDataToSend);
-          Alert.alert('Success', 'Product created');
+        console.log('📸 Local image detected, uploading to Cloudinary first...');
+        try {
+          imageUrl = await uploadProductImageToCloudinary(formData.image, editingId);
+          console.log('✅ Image uploaded to Cloudinary:', imageUrl);
+        } catch (error) {
+          Alert.alert('Image Upload Failed', 'Failed to upload image to Cloudinary: ' + error.message);
+          setLoading(false);
+          return;
         }
+      } else if (formData.image) {
+        console.log('🔗 Using existing image URL:', formData.image);
       } else {
-        // Use JSON for URL-based images
-        const jsonData = {
-          name: formData.name,
-          price: parseFloat(formData.price),
-          category: formData.category,
-          description: formData.description,
-          vtuberTag: formData.vtuberTag,
-          image: formData.image || null,
-        };
-        
-        if (formData.image) {
-          console.log('🔗 Using image URL:', formData.image);
-        }
-
-        if (editingId) {
-          await axiosInstance.put(`/products/${editingId}`, jsonData);
-          Alert.alert('Success', 'Product updated');
-        } else {
-          await axiosInstance.post('/products', jsonData);
-          Alert.alert('Success', 'Product created');
-        }
+        console.log('ℹ️ No image provided');
       }
 
-      resetForm();
-      setShowModal(false);
-      loadProducts();
+      // Now send JSON data to backend with the Cloudinary URL (no FormData needed)
+      const dataToSend = {
+        name: formData.name,
+        price: priceValue, // Use the validated number
+        category: formData.category,
+        description: formData.description,
+        vtuberTag: formData.vtuberTag,
+        image: imageUrl || null,
+      };
+
+      console.log('📦 Sending product data to backend:', {
+        ...dataToSend,
+        image: imageUrl ? imageUrl.substring(0, 50) + '...' : null,
+      });
+
+      // Dispatch Redux action
+      let result;
+      if (editingId) {
+        result = await dispatch(updateProduct({ productId: editingId, formData: dataToSend }));
+        console.log('✅ Product updated via Redux');
+      } else {
+        result = await dispatch(createProduct(dataToSend));
+        console.log('✅ Product created via Redux');
+      }
+
+      if (result.payload) {
+        console.log('✅ Product saved:', result.payload);
+        
+        // Update local table data immediately for instant UI update
+        if (editingId) {
+          // Update existing product in table
+          setTableData(prevData => 
+            prevData.map(p => p._id === editingId ? result.payload : p)
+          );
+          console.log('♻️ Updated product in table:', result.payload._id);
+        } else {
+          // Add new product to table
+          setTableData(prevData => [result.payload, ...prevData]);
+          console.log('♻️ Added new product to table:', result.payload._id);
+        }
+        
+        Alert.alert('Success', editingId ? 'Product updated' : 'Product created');
+        resetForm();
+        setShowModal(false);
+        
+        // Fetch fresh data from server to ensure sync
+        console.log('🔄 Refreshing product list from server...');
+        dispatch(fetchProducts());
+      } else {
+        throw new Error(result.error?.message || 'Failed to save product');
+      }
     } catch (error) {
       console.error('Request error:', error);
-      Alert.alert('Error', error.response?.data?.error || error.message || 'Failed to save product');
+      Alert.alert('Error', error.message || 'Failed to save product');
     } finally {
       setLoading(false);
     }
@@ -209,11 +268,22 @@ const AdminProductsScreen = ({ navigation }) => {
         style: 'destructive',
         onPress: async () => {
           try {
-            await axiosInstance.delete(`/products/${productId}`);
-            Alert.alert('Success', 'Product deleted');
-            loadProducts();
+            const result = await dispatch(deleteProduct(productId));
+            if (result.payload) {
+              // Remove from local table immediately for instant feedback
+              setTableData(prevData => prevData.filter(p => p._id !== productId));
+              console.log('♻️ Removed product from table:', productId);
+              
+              Alert.alert('Success', 'Product deleted');
+              
+              // Refresh from server to ensure sync
+              console.log('🔄 Refreshing product list from server...');
+              dispatch(fetchProducts());
+            } else {
+              throw new Error(result.error?.message || 'Failed to delete product');
+            }
           } catch (error) {
-            Alert.alert('Error', error.response?.data?.error || error.message || 'Failed to delete product');
+            Alert.alert('Error', error.message || 'Failed to delete product');
           }
         },
       },
@@ -302,9 +372,7 @@ const AdminProductsScreen = ({ navigation }) => {
             placeholder="Price"
             keyboardType="decimal-pad"
             value={formData.price}
-            onChangeText={(text) =>
-              setFormData({ ...formData, price: text })
-            }
+            onChangeText={handlePriceChange}
           />
 
           <TextInput

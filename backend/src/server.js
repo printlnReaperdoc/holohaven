@@ -17,8 +17,24 @@ import notificationsRoutes from "./routes/notifications.routes.js";
 dotenv.config({ override: true });
 
 const app = express();
-app.use(cors());
+
+// Configure CORS to accept requests from Android emulator
+app.use(cors({
+  origin: '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Body parsers
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path}`);
+  next();
+});
 
 // Routes
 app.use("/auth", authRoutes);
@@ -46,9 +62,11 @@ const startServer = async () => {
     const status = await cloudinary.api.ping();
     console.log("✅ Cloudinary connected:", status.status);
 
-    app.listen(process.env.PORT, () =>
-      console.log(`🚀 API running on port ${process.env.PORT}`)
-    );
+    const PORT = process.env.PORT || 4000;
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 API running on http://0.0.0.0:${PORT}`);
+      console.log(`🚀 Android emulator can access: http://10.0.2.2:${PORT}`);
+    });
   } catch (error) {
     console.error("❌ Server startup failed:", error);
     process.exit(1);

@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import * as SecureStore from 'expo-secure-store';
 import { getToken } from '../../auth/token';
 import { axiosInstance } from '../../api/api';
+import { uploadProfilePictureToCloudinary } from '../../utils/cloudinaryUpload';
 
 export const login = createAsyncThunk(
   'auth/login',
@@ -106,28 +107,25 @@ export const uploadProfilePicture = createAsyncThunk(
     try {
       console.log('uploadProfilePicture: Starting upload for URI:', imageUri);
       
-      // Create FormData with the image URI
-      const formData = new FormData();
-      formData.append('profilePicture', {
-        uri: imageUri,
-        type: 'image/jpeg',
-        name: 'profile.jpg',
-      });
+      // Step 1: Upload image directly to Cloudinary (bypasses backend network issues)
+      console.log('uploadProfilePicture: Uploading to Cloudinary directly...');
+      const cloudinaryUrl = await uploadProfilePictureToCloudinary(imageUri);
+      console.log('uploadProfilePicture: Cloudinary upload successful:', cloudinaryUrl);
 
-      console.log('uploadProfilePicture: FormData created, sending to server');
-      
-      const response = await axiosInstance.post(
-        '/users/profile-picture',
-        formData,
+      // Step 2: Save the Cloudinary URL to the backend
+      console.log('uploadProfilePicture: Saving profile picture URL to backend...');
+      const response = await axiosInstance.put(
+        '/users/profile',
+        { 
+          profilePicture: cloudinaryUrl 
+        },
         {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
           timeout: 30000,
         }
       );
 
-      console.log('uploadProfilePicture: Upload successful, new URL:', response.data.profilePicture);
+      console.log('uploadProfilePicture: Profile picture saved to backend successfully');
+      console.log('uploadProfilePicture: New URL:', response.data.profilePicture);
       return response.data;
     } catch (error) {
       console.error('uploadProfilePicture: Error caught:', error.message);

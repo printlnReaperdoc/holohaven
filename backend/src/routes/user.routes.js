@@ -107,6 +107,12 @@ router.post(
   "/profile-picture",
   authMiddleware,
   (req, res, next) => {
+    // If Content-Type is application/json, skip multer (image already uploaded via Cloudinary)
+    if (req.get('content-type') && req.get('content-type').includes('application/json')) {
+      console.log('✅ JSON request detected, skipping multer for profile picture');
+      return next();
+    }
+    
     upload.single("profilePicture")(req, res, (err) => {
       if (err) {
         console.error('Multer error:', err.message);
@@ -119,20 +125,22 @@ router.post(
     try {
       console.log('profilePictureRoute: Request received from user:', req.userId);
       
-      if (!req.file) {
-        console.error('profilePictureRoute: No file in request');
-        return res.status(400).json({ error: "No file uploaded" });
+      // If profilePicture is in body (JSON), use it directly
+      const profilePictureUrl = req.body?.profilePicture || req.file?.path;
+      
+      if (!profilePictureUrl) {
+        console.error('profilePictureRoute: No file or URL in request');
+        return res.status(400).json({ error: "No profile picture provided" });
       }
 
-      console.log('profilePictureRoute: File uploaded to Cloudinary:', {
-        path: req.file.path,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
+      console.log('profilePictureRoute: Picture URL:', {
+        type: req.file ? 'file' : 'url',
+        url: profilePictureUrl,
       });
 
       const user = await User.findByIdAndUpdate(
         req.userId,
-        { profilePicture: req.file.path },
+        { profilePicture: profilePictureUrl },
         { new: true }
       ).select("-passwordHash");
 

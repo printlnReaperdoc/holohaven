@@ -6,6 +6,33 @@ import upload from "../middleware/upload.js";
 
 const router = express.Router();
 
+// Utility function to handle multer errors - skip multer for JSON requests
+const handleMulterError = (uploadFn) => (req, res, next) => {
+  // If Content-Type is application/json, skip multer and go directly to handler
+  if (req.get('content-type') && req.get('content-type').includes('application/json')) {
+    console.log('✅ JSON request detected, skipping multer middleware');
+    return next();
+  }
+  
+  uploadFn(req, res, (err) => {
+    if (err) {
+      console.error('❌ Multer middleware error:', {
+        message: err.message,
+        code: err.code,
+        field: err.field,
+        status: err.status,
+      });
+      // Return 400 for multer errors (file too large, wrong field name, etc)
+      return res.status(400).json({ 
+        error: 'File upload error: ' + (err.message || 'Unknown error'),
+        code: err.code 
+      });
+    }
+    // Multer succeeded, continue to route handler
+    next();
+  });
+};
+
 // Helper to convert Decimal128 to regular number
 const convertProductPrice = (product) => {
   const converted = product.toObject ? product.toObject() : product;
@@ -84,10 +111,21 @@ router.get("/featured/trending", async (req, res) => {
 });
 
 // Add image to product gallery
-router.post("/:id/images", authMiddleware, upload.single("image"), async (req, res) => {
+router.post("/:id/images", authMiddleware, handleMulterError(upload.single("image")), async (req, res) => {
   try {
+    console.log('🎯 POST /products/:id/images - File upload:', {
+      productId: req.params.id,
+      hasFile: !!req.file,
+      filePath: req.file?.path,
+      fileSecureUrl: req.file?.secure_url,
+      fileOriginalname: req.file?.originalname,
+    });
+
     const product = await Product.findById(req.params.id);
-    if (!product) return res.sendStatus(404);
+    if (!product) {
+      console.error('❌ Product not found:', req.params.id);
+      return res.sendStatus(404);
+    }
 
     // Check if user is admin
     const user = await User.findById(req.userId);
@@ -97,17 +135,23 @@ router.post("/:id/images", authMiddleware, upload.single("image"), async (req, r
 
     // Allow if user is admin OR owner, or if product is seeded
     if (!isAdmin && !isOwner && !isSeededProduct) {
+      console.warn('❌ Access denied for product gallery update');
       return res.sendStatus(403);
     }
 
-    if (req.file.path) {
-      product.images.push(req.file.path);
-      if (!product.image) product.image = req.file.path;
+    if (req.file?.path || req.file?.secure_url) {
+      const imageUrl = req.file.secure_url || req.file.path;
+      product.images.push(imageUrl);
+      if (!product.image) product.image = imageUrl;
       await product.save();
+      console.log('✅ Image added to gallery:', imageUrl);
+    } else {
+      console.error('❌ No image path found in req.file');
     }
 
     res.json(product);
   } catch (error) {
+    console.error('❌ Error adding image:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -133,8 +177,13 @@ router.get("/:id", async (req, res) => {
 });
 
 // CREATE product (admin or user upload)
-router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
+router.post("/", authMiddleware, handleMulterError(upload.single("image")), async (req, res) => {
   try {
+    console.log('📨 POST /products - Request received with:', {
+      fields: Object.keys(req.body),
+      hasFile: !!req.file,
+    });
+    
     const { name, price, category, description, vtuberTag, image } = req.body;
 
     // Validate required fields
@@ -147,11 +196,18 @@ router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
     if (req.file?.path) {
       // File was uploaded
       imageValue = req.file.path;
-      console.log('📸 Product image from file upload:', imageValue);
+      console.log('�️ POST /products - Image from file upload:', {
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        size: req.file.size,
+        path: imageValue,
+      });
     } else if (image && typeof image === 'string') {
       // Image URL was provided
       imageValue = image;
-      console.log('🔗 Product image from URL:', imageValue);
+      console.log('🔗 POST /products - Image from URL:', imageValue);
+    } else {
+      console.warn('⚠️ POST /products - No image provided');
     }
 
     const product = new Product({
@@ -166,16 +222,28 @@ router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
     });
 
     await product.save();
+    console.log('✅ Product created:', {
+      _id: product._id,
+      name: product.name,
+      image: product.image,
+      images: product.images,
+    });
     res.status(201).json(product);
   } catch (error) {
-    console.error('Error creating product:', error);
+    console.error('❌ Error creating product:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // UPDATE product
-router.put("/:id", authMiddleware, upload.single("image"), async (req, res) => {
+router.put("/:id", authMiddleware, handleMulterError(upload.single("image")), async (req, res) => {
   try {
+    console.log('📨 PUT /products/:id - Request received with:', {
+      productId: req.params.id,
+      fields: Object.keys(req.body),
+      hasFile: !!req.file,
+    });
+
     const product = await Product.findById(req.params.id);
     if (!product) return res.sendStatus(404);
 
@@ -187,6 +255,7 @@ router.put("/:id", authMiddleware, upload.single("image"), async (req, res) => {
     // Allow if user is admin OR owner, or if product is seeded (no uploadedBy)
     const isSeededProduct = !product.uploadedBy;
     if (!isAdmin && !isOwner && !isSeededProduct) {
+      console.warn('❌ PUT /products/:id - Access denied:', { isAdmin, isOwner, isSeededProduct });
       return res.sendStatus(403);
     }
 
@@ -201,6 +270,7 @@ router.put("/:id", authMiddleware, upload.single("image"), async (req, res) => {
 
     // Update image from file upload or URL string
     if (req.file?.path) {
+      console.log('🖼️ PUT /products/:id - New image from file upload:', req.file.path);
       product.image = req.file.path;
       if (!product.images.includes(req.file.path)) {
         product.images.push(req.file.path);
@@ -208,14 +278,22 @@ router.put("/:id", authMiddleware, upload.single("image"), async (req, res) => {
     } else if (image && typeof image === 'string') {
       // Only update if it's a different URL
       if (image !== product.image) {
+        console.log('🔗 PUT /products/:id - New image from URL:', image);
         product.image = image;
       }
+    } else {
+      console.log('⚠️ PUT /products/:id - No image provided in update');
     }
 
     await product.save();
+    console.log('✅ Product updated:', {
+      _id: product._id,
+      name: product.name,
+      image: product.image,
+    });
     res.json(product);
   } catch (error) {
-    console.error('Error updating product:', error);
+    console.error('❌ Error updating product:', error);
     res.status(500).json({ error: error.message });
   }
 });

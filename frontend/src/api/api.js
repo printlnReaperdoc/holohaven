@@ -8,14 +8,16 @@ let API_URL;
 
 // Always use platform-specific URLs for mobile apps
 if (Platform.OS === 'android') {
-  API_URL = 'http://10.0.2.2:4000'; // Android emulator - must use 10.0.2.2 for localhost
+  // Use actual PC IP address for more reliable connection
+  // This works better than 10.0.2.2 which can be unreliable
+  API_URL = 'http://192.168.68.136:4000'; // Android emulator - use PC's actual IP
 } else if (Platform.OS === 'ios') {
   API_URL = 'http://localhost:4000'; // iOS simulator
 } else if (Platform.OS === 'web') {
   API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000'; // Web
 } else {
   // Physical device or unknown platform
-  API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.100:4000';
+  API_URL = process.env.REACT_APP_API_URL || 'http://192.168.68.136:4000';
 }
 
 // Ensure URL doesn't have trailing slash
@@ -29,10 +31,9 @@ export { API_URL };
 // Create axios instance with interceptor for auth token
 export const axiosInstance = axios.create({
   baseURL: API_URL,
-  timeout: 20000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 30000, // Increase timeout to 30s for FormData uploads
+  // Do NOT set Content-Type header - let Axios handle it
+  // This allows FormData to set multipart/form-data with proper boundary
 });
 
 // Add request interceptor to include auth token
@@ -46,6 +47,28 @@ axiosInstance.interceptors.request.use(
       } else {
         console.warn('⚠️ No token found for authenticated request:', config.method.toUpperCase(), config.url);
       }
+      
+      // For FormData, ensure Content-Type is NOT explicitly set (let Axios handle it)
+      // For JSON, set Content-Type only if data is present
+      if (config.data instanceof FormData) {
+        // FormData - do not set Content-Type, Axios will handle it with proper boundary
+        delete config.headers['Content-Type'];
+        console.log('📦 FormData request detected:', {
+          url: config.url,
+          method: config.method,
+          timeout: config.timeout,
+          baseURL: config.baseURL,
+        });
+      } else if (config.data && typeof config.data === 'object') {
+        // JSON request
+        config.headers['Content-Type'] = 'application/json';
+        console.log('🔗 JSON request:', {
+          url: config.url,
+          method: config.method,
+          dataKeys: Object.keys(config.data),
+        });
+      }
+      
     } catch (error) {
       console.error('❌ Error retrieving token:', error);
     }
