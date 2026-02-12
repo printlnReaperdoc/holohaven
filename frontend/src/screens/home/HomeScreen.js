@@ -18,7 +18,7 @@ import {
 } from '../../redux/slices/productsSlice';
 import { fetchPromotions as fetchPromotionsAction } from '../../redux/slices/promotionsSlice';
 
-const DEFAULT_FALLBACK = require('../../../assets/default-profile-picture.jpg');
+const DEFAULT_FALLBACK = require('../../../assets/default-product-image.jpg');
 
 const HomeScreen = ({ navigation }) => {
   const dispatch = useDispatch();

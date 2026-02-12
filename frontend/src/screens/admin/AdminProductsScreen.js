@@ -15,18 +15,11 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchProducts, createProduct } from '../../redux/slices/productsSlice';
-import axios from 'axios';
+import { axiosInstance } from '../../api/api';
 import { Platform } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 
-const DEFAULT_IMAGE = require('../../../assets/default-profile-picture.jpg');
-
-const ENV_API = process.env.REACT_APP_API_URL;
-const PLATFORM_DEFAULT = Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
-let API_URL = ENV_API || PLATFORM_DEFAULT || 'http://192.168.1.100:4000';
-if (Platform.OS === 'android' && typeof API_URL === 'string' && API_URL.includes('localhost')) {
-  API_URL = API_URL.replace('localhost', '10.0.2.2');
-  console.log('Adjusted AdminProductsScreen API_URL for Android emulator:', API_URL);
-}
+const DEFAULT_IMAGE = require('../../../assets/default-product-image.jpg');
 
 const AdminProductsScreen = ({ navigation }) => {
   const dispatch = useDispatch();
@@ -51,15 +44,12 @@ const AdminProductsScreen = ({ navigation }) => {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_URL}/products`, {
-        timeout: 10000,
-        headers: {},
-      });
+      const response = await axiosInstance.get('/products');
       console.log('Products loaded:', response.data.length);
       setTableData(response.data);
     } catch (error) {
       console.error('Error loading products:', error.message);
-      Alert.alert('Error', error.message || 'Failed to load products');
+      Alert.alert('Error', error.response?.data?.error || error.message || 'Failed to load products');
     } finally {
       setLoading(false);
     }
@@ -77,6 +67,57 @@ const AdminProductsScreen = ({ navigation }) => {
     setEditingId(null);
   };
 
+  const pickImageFromGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Gallery access permission is required');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaType.Image,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        setFormData({ ...formData, image: imageUri });
+        Alert.alert('Success', 'Image selected');
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image');
+    }
+  };
+
+  const pickImageFromCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera access permission is required');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        setFormData({ ...formData, image: imageUri });
+        Alert.alert('Success', 'Photo captured');
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo');
+    }
+  };
+
   const handleSaveProduct = async () => {
     if (!formData.name || !formData.price || !formData.category) {
       Alert.alert('Error', 'Name, price, and category are required');
@@ -85,32 +126,63 @@ const AdminProductsScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const payload = {
-        name: formData.name,
-        price: parseFloat(formData.price),
-        category: formData.category,
-        description: formData.description,
-        vtuberTag: formData.vtuberTag,
-        image: formData.image || null,
-      };
+      // Check if we have a local image to upload
+      if (formData.image && formData.image.startsWith('file://')) {
+        // Use FormData for file uploads
+        const formDataToSend = new FormData();
+        formDataToSend.append('name', formData.name);
+        formDataToSend.append('price', parseFloat(formData.price));
+        formDataToSend.append('category', formData.category);
+        formDataToSend.append('description', formData.description);
+        formDataToSend.append('vtuberTag', formData.vtuberTag);
 
-      if (editingId) {
-        await axios.put(`${API_URL}/products/${editingId}`, payload, {
-          timeout: 10000,
+        // For React Native, append file with uri property
+        formDataToSend.append('image', {
+          uri: formData.image,
+          type: 'image/jpeg',
+          name: 'product-image.jpg',
         });
-        Alert.alert('Success', 'Product updated');
+        
+        console.log('📸 Uploading local image via FormData:', formData.image);
+
+        // Use axios with proper FormData handling for React Native
+        if (editingId) {
+          await axiosInstance.put(`/products/${editingId}`, formDataToSend);
+          Alert.alert('Success', 'Product updated');
+        } else {
+          await axiosInstance.post('/products', formDataToSend);
+          Alert.alert('Success', 'Product created');
+        }
       } else {
-        await axios.post(`${API_URL}/products`, payload, {
-          timeout: 10000,
-        });
-        Alert.alert('Success', 'Product created');
+        // Use JSON for URL-based images
+        const jsonData = {
+          name: formData.name,
+          price: parseFloat(formData.price),
+          category: formData.category,
+          description: formData.description,
+          vtuberTag: formData.vtuberTag,
+          image: formData.image || null,
+        };
+        
+        if (formData.image) {
+          console.log('🔗 Using image URL:', formData.image);
+        }
+
+        if (editingId) {
+          await axiosInstance.put(`/products/${editingId}`, jsonData);
+          Alert.alert('Success', 'Product updated');
+        } else {
+          await axiosInstance.post('/products', jsonData);
+          Alert.alert('Success', 'Product created');
+        }
       }
 
       resetForm();
       setShowModal(false);
       loadProducts();
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to save product');
+      console.error('Request error:', error);
+      Alert.alert('Error', error.response?.data?.error || error.message || 'Failed to save product');
     } finally {
       setLoading(false);
     }
@@ -137,13 +209,11 @@ const AdminProductsScreen = ({ navigation }) => {
         style: 'destructive',
         onPress: async () => {
           try {
-            await axios.delete(`${API_URL}/products/${productId}`, {
-              timeout: 10000,
-            });
+            await axiosInstance.delete(`/products/${productId}`);
             Alert.alert('Success', 'Product deleted');
             loadProducts();
           } catch (error) {
-            Alert.alert('Error', error.message || 'Failed to delete product');
+            Alert.alert('Error', error.response?.data?.error || error.message || 'Failed to delete product');
           }
         },
       },
@@ -269,12 +339,29 @@ const AdminProductsScreen = ({ navigation }) => {
           <TouchableOpacity
             style={styles.imageUploadButton}
             onPress={() => Alert.alert('Upload Options', 'Choose method: Camera or Gallery', [
-              { text: 'Camera', onPress: () => Alert.alert('Camera not yet implemented') },
-              { text: 'Gallery', onPress: () => Alert.alert('Gallery not yet implemented') },
+              { text: 'Camera', onPress: pickImageFromCamera },
+              { text: 'Gallery', onPress: pickImageFromGallery },
+              { text: 'Cancel', style: 'cancel' },
             ])}
           >
             <Text style={styles.imageUploadButtonText}>📷 Upload Image or Use Camera</Text>
           </TouchableOpacity>
+
+          {formData.image && (
+            <View style={styles.imagePreviewContainer}>
+              <Image
+                source={{ uri: formData.image }}
+                style={styles.imagePreview}
+              />
+              <TouchableOpacity
+                style={styles.removeImageButton}
+                onPress={() => setFormData({ ...formData, image: '' })}
+              >
+                <Text style={styles.removeImageButtonText}>Remove Image</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <TextInput
             style={styles.input}
             placeholder="Or paste Image URL"
@@ -448,6 +535,28 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  imagePreviewContainer: {
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  imagePreview: {
+    width: 150,
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: '#E5E7EB',
+  },
+  removeImageButton: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+  },
+  removeImageButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 12,
   },
   forbidden: {
     color: '#DC2626',

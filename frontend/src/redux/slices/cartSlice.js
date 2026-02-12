@@ -1,6 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import { getToken } from '../../auth/token';
+import { axiosInstance } from '../../api/api';
 import {
   saveCartToSQLite,
   loadCartFromSQLite,
@@ -9,16 +8,11 @@ import {
   removeItemFromSQLiteCart,
 } from '../../utils/sqliteDb';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.100:4000';
-
 export const fetchCart = createAsyncThunk(
   'cart/fetchCart',
   async (_, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.get(`${API_URL}/cart`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.get('/cart');
       // Save to SQLite for offline access
       await saveCartToSQLite(response.data.items || []);
       return response.data;
@@ -44,11 +38,9 @@ export const addToCart = createAsyncThunk(
   'cart/addToCart',
   async ({ productId, quantity = 1 }, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.post(
-        `${API_URL}/cart/items`,
-        { productId, quantity },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axiosInstance.post(
+        '/cart/items',
+        { productId, quantity }
       );
       // Save updated cart to SQLite
       await saveCartToSQLite(response.data.items || []);
@@ -68,11 +60,9 @@ export const updateCartItem = createAsyncThunk(
   'cart/updateCartItem',
   async ({ productId, quantity }, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.patch(
-        `${API_URL}/cart/items/${productId}`,
-        { quantity },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axiosInstance.patch(
+        `/cart/items/${productId}`,
+        { quantity }
       );
       // Save updated cart to SQLite
       await saveCartToSQLite(response.data.items || []);
@@ -94,10 +84,8 @@ export const removeFromCart = createAsyncThunk(
   'cart/removeFromCart',
   async (productId, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.delete(
-        `${API_URL}/cart/items/${productId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axiosInstance.delete(
+        `/cart/items/${productId}`
       );
       // Save updated cart to SQLite
       await saveCartToSQLite(response.data.items || []);

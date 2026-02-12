@@ -1,27 +1,12 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import { getToken } from '../../auth/token';
-import { Platform } from 'react-native';
-
-const ENV_API = process.env.REACT_APP_API_URL;
-const PLATFORM_DEFAULT = Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
-let API_URL = ENV_API || PLATFORM_DEFAULT || 'http://192.168.1.100:4000';
-
-if (Platform.OS === 'android' && typeof API_URL === 'string' && API_URL.includes('localhost')) {
-  API_URL = API_URL.replace('localhost', '10.0.2.2');
-  console.log('Adjusted products API_URL for Android emulator:', API_URL);
-}
-const AXIOS_TIMEOUT = 10000;
+import { axiosInstance } from '../../api/api';
 
 export const fetchProducts = createAsyncThunk(
   'products/fetchProducts',
   async (params = {}, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.get(`${API_URL}/products`, {
+      const response = await axiosInstance.get('/products', {
         params,
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        timeout: AXIOS_TIMEOUT,
       });
       return response.data;
     } catch (error) {
@@ -42,11 +27,7 @@ export const fetchProducts = createAsyncThunk(
 export const fetchProductById = createAsyncThunk(
   'products/fetchProductById',
   async (productId) => {
-    const token = await getToken();
-    const response = await axios.get(`${API_URL}/products/${productId}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      timeout: AXIOS_TIMEOUT,
-    });
+    const response = await axiosInstance.get(`/products/${productId}`);
     return response.data;
   }
 );
@@ -55,10 +36,7 @@ export const createProduct = createAsyncThunk(
   'products/createProduct',
   async (formData, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.post(`${API_URL}/products`, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.post('/products', formData);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || { error: error.message });
@@ -69,11 +47,7 @@ export const createProduct = createAsyncThunk(
 export const fetchCategories = createAsyncThunk(
   'products/fetchCategories',
   async () => {
-    const token = await getToken();
-    const response = await axios.get(`${API_URL}/products/categories/list`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      timeout: AXIOS_TIMEOUT,
-    });
+    const response = await axiosInstance.get('/products/categories/list');
     return response.data;
   }
 );
@@ -81,11 +55,7 @@ export const fetchCategories = createAsyncThunk(
 export const fetchFeaturedProducts = createAsyncThunk(
   'products/fetchFeaturedProducts',
   async () => {
-    const token = await getToken();
-    const response = await axios.get(`${API_URL}/products/featured/trending`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      timeout: AXIOS_TIMEOUT,
-    });
+    const response = await axiosInstance.get('/products/featured/trending');
     return response.data;
   }
 );

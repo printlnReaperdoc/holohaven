@@ -1,16 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import { getToken } from '../../auth/token';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.100:4000';
+import { axiosInstance } from '../../api/api';
 
 export const fetchReviews = createAsyncThunk(
   'reviews/fetchReviews',
   async (productId) => {
-    const token = await getToken();
-    const response = await axios.get(
-      `${API_URL}/reviews/product/${productId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+    const response = await axiosInstance.get(
+      `/reviews/product/${productId}`
     );
     return response.data;
   }
@@ -19,10 +14,7 @@ export const fetchReviews = createAsyncThunk(
 export const fetchUserReviews = createAsyncThunk(
   'reviews/fetchUserReviews',
   async () => {
-    const token = await getToken();
-    const response = await axios.get(`${API_URL}/reviews/user/my-reviews`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await axiosInstance.get('/reviews/user/my-reviews');
     return response.data;
   }
 );
@@ -31,10 +23,7 @@ export const createReview = createAsyncThunk(
   'reviews/createReview',
   async (reviewData, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.post(`${API_URL}/reviews`, reviewData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.post('/reviews', reviewData);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || { error: error.message });
@@ -46,11 +35,9 @@ export const updateReview = createAsyncThunk(
   'reviews/updateReview',
   async ({ reviewId, ...reviewData }, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.put(
-        `${API_URL}/reviews/${reviewId}`,
-        reviewData,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axiosInstance.put(
+        `/reviews/${reviewId}`,
+        reviewData
       );
       return response.data;
     } catch (error) {

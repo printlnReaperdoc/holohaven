@@ -1,16 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import { getToken } from '../../auth/token';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.100:4000';
+import { axiosInstance } from '../../api/api';
 
 export const fetchOrders = createAsyncThunk(
   'orders/fetchOrders',
   async () => {
-    const token = await getToken();
-    const response = await axios.get(`${API_URL}/orders`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await axiosInstance.get('/orders');
     return response.data;
   }
 );
@@ -18,10 +12,7 @@ export const fetchOrders = createAsyncThunk(
 export const fetchOrderById = createAsyncThunk(
   'orders/fetchOrderById',
   async (orderId) => {
-    const token = await getToken();
-    const response = await axios.get(`${API_URL}/orders/${orderId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await axiosInstance.get(`/orders/${orderId}`);
     return response.data;
   }
 );
@@ -30,10 +21,7 @@ export const createOrder = createAsyncThunk(
   'orders/createOrder',
   async (orderData, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.post(`${API_URL}/orders/checkout`, orderData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axiosInstance.post('/orders/checkout', orderData);
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data || { error: error.message });
@@ -45,11 +33,9 @@ export const updateOrderStatus = createAsyncThunk(
   'orders/updateOrderStatus',
   async ({ orderId, status }, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.patch(
-        `${API_URL}/orders/${orderId}/status`,
-        { status },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axiosInstance.patch(
+        `/orders/${orderId}/status`,
+        { status }
       );
       return response.data;
     } catch (error) {

@@ -1,5 +1,6 @@
 import express from "express";
 import Product from "../models/Product.js";
+import User from "../models/User.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 import upload from "../middleware/upload.js";
 
@@ -88,7 +89,14 @@ router.post("/:id/images", authMiddleware, upload.single("image"), async (req, r
     const product = await Product.findById(req.params.id);
     if (!product) return res.sendStatus(404);
 
-    if (product.uploadedBy.toString() !== req.userId && !req.isAdmin) {
+    // Check if user is admin
+    const user = await User.findById(req.userId);
+    const isAdmin = user?.isAdmin || false;
+    const isOwner = product.uploadedBy && product.uploadedBy.toString() === req.userId;
+    const isSeededProduct = !product.uploadedBy;
+
+    // Allow if user is admin OR owner, or if product is seeded
+    if (!isAdmin && !isOwner && !isSeededProduct) {
       return res.sendStatus(403);
     }
 
@@ -127,41 +135,87 @@ router.get("/:id", async (req, res) => {
 // CREATE product (admin or user upload)
 router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
   try {
-    const { name, price, category, description, vtuberTag } = req.body;
+    const { name, price, category, description, vtuberTag, image } = req.body;
+
+    // Validate required fields
+    if (!name || !price || !category) {
+      return res.status(400).json({ error: 'Name, price, and category are required' });
+    }
+
+    // Get image from file upload or from body (URL string)
+    let imageValue = null;
+    if (req.file?.path) {
+      // File was uploaded
+      imageValue = req.file.path;
+      console.log('📸 Product image from file upload:', imageValue);
+    } else if (image && typeof image === 'string') {
+      // Image URL was provided
+      imageValue = image;
+      console.log('🔗 Product image from URL:', imageValue);
+    }
 
     const product = new Product({
       name,
-      price,
+      price: parseFloat(price),
       category,
       description,
       vtuberTag,
       uploadedBy: req.userId,
-      image: req.file?.path || null,
-      images: [req.file?.path].filter(Boolean),
+      image: imageValue,
+      images: imageValue ? [imageValue] : [],
     });
 
     await product.save();
     res.status(201).json(product);
   } catch (error) {
+    console.error('Error creating product:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // UPDATE product
-router.put("/:id", authMiddleware, async (req, res) => {
+router.put("/:id", authMiddleware, upload.single("image"), async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (!product) return res.sendStatus(404);
 
-    // Check if user is admin or owner
-    if (product.uploadedBy.toString() !== req.userId && !req.isAdmin) {
+    // Check if user is admin (query database to be sure)
+    const user = await User.findById(req.userId);
+    const isAdmin = user?.isAdmin || false;
+    const isOwner = product.uploadedBy && product.uploadedBy.toString() === req.userId;
+    
+    // Allow if user is admin OR owner, or if product is seeded (no uploadedBy)
+    const isSeededProduct = !product.uploadedBy;
+    if (!isAdmin && !isOwner && !isSeededProduct) {
       return res.sendStatus(403);
     }
 
-    Object.assign(product, req.body);
+    // Update only specific fields from body
+    const { name, price, category, description, vtuberTag, image } = req.body;
+    
+    if (name) product.name = name;
+    if (price) product.price = price;
+    if (category) product.category = category;
+    if (description) product.description = description;
+    if (vtuberTag) product.vtuberTag = vtuberTag;
+
+    // Update image from file upload or URL string
+    if (req.file?.path) {
+      product.image = req.file.path;
+      if (!product.images.includes(req.file.path)) {
+        product.images.push(req.file.path);
+      }
+    } else if (image && typeof image === 'string') {
+      // Only update if it's a different URL
+      if (image !== product.image) {
+        product.image = image;
+      }
+    }
+
     await product.save();
     res.json(product);
   } catch (error) {
+    console.error('Error updating product:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -172,7 +226,14 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (!product) return res.sendStatus(404);
 
-    if (product.uploadedBy.toString() !== req.userId && !req.isAdmin) {
+    // Check if user is admin
+    const user = await User.findById(req.userId);
+    const isAdmin = user?.isAdmin || false;
+    const isOwner = product.uploadedBy && product.uploadedBy.toString() === req.userId;
+    const isSeededProduct = !product.uploadedBy;
+
+    // Allow if user is admin OR owner, or if product is seeded
+    if (!isAdmin && !isOwner && !isSeededProduct) {
       return res.sendStatus(403);
     }
 

@@ -17,7 +17,7 @@ import {
   setFilters,
 } from '../../redux/slices/productsSlice';
 
-const DEFAULT_IMAGE = require('../../../assets/default-profile-picture.jpg');
+const DEFAULT_IMAGE = require('../../../assets/default-product-image.jpg');
 
 const CategoriesScreen = ({ navigation }) => {
   const dispatch = useDispatch();

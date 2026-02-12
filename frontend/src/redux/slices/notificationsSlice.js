@@ -1,9 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import { getToken } from '../../auth/token';
+import { axiosInstance } from '../../api/api';
 import * as Notifications from 'expo-notifications';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.100:4000';
 
 /**
  * Register device push token with backend
@@ -12,11 +9,9 @@ export const registerPushToken = createAsyncThunk(
   'notifications/registerPushToken',
   async (pushToken, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      await axios.post(
-        `${API_URL}/notifications/register-token`,
-        { token: pushToken },
-        { headers: { Authorization: `Bearer ${token}` } }
+      await axiosInstance.post(
+        '/notifications/register-token',
+        { token: pushToken }
       );
       return pushToken;
     } catch (error) {
@@ -32,11 +27,9 @@ export const sendPromotionNotification = createAsyncThunk(
   'notifications/sendPromotionNotification',
   async ({ productId, title, message }, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.post(
-        `${API_URL}/notifications/send-promotion`,
-        { productId, title, message },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axiosInstance.post(
+        '/notifications/send-promotion',
+        { productId, title, message }
       );
       return response.data;
     } catch (error) {
@@ -52,11 +45,9 @@ export const sendShiranuiPromo = createAsyncThunk(
   'notifications/sendShiranuiPromo',
   async (_, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      const response = await axios.post(
-        `${API_URL}/notifications/send-shiranui-promo`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await axiosInstance.post(
+        '/notifications/send-shiranui-promo',
+        {}
       );
       return response.data;
     } catch (error) {

@@ -1,16 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
-import { getToken } from '../../auth/token';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.100:4000';
+import { axiosInstance } from '../../api/api';
 
 export const fetchPromotions = createAsyncThunk(
   'promotions/fetchPromotions',
   async () => {
-    const token = await getToken();
-    const response = await axios.get(`${API_URL}/promotions`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await axiosInstance.get('/promotions');
     return response.data;
   }
 );
@@ -18,10 +12,8 @@ export const fetchPromotions = createAsyncThunk(
 export const fetchPromotionById = createAsyncThunk(
   'promotions/fetchPromotionById',
   async (promotionId) => {
-    const token = await getToken();
-    const response = await axios.get(
-      `${API_URL}/promotions/${promotionId}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+    const response = await axiosInstance.get(
+      `/promotions/${promotionId}`
     );
     return response.data;
   }

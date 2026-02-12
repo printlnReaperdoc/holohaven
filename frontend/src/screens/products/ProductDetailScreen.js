@@ -16,7 +16,7 @@ import { fetchProductById } from '../../redux/slices/productsSlice';
 import { addToCart } from '../../redux/slices/cartSlice';
 import { fetchReviews } from '../../redux/slices/reviewsSlice';
 
-const DEFAULT_FALLBACK = require('../../../assets/default-profile-picture.jpg');
+const DEFAULT_FALLBACK = require('../../../assets/default-product-image.jpg');
 
 const ProductDetailScreen = ({ route, navigation }) => {
   const { productId } = route.params;

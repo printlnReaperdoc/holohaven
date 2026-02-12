@@ -1,9 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import axios from 'axios';
+import { axiosInstance } from '../api/api';
 import { getToken } from '../auth/token';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://192.168.1.100:4000';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -23,12 +21,10 @@ export const registerForPush = async () => {
     const token = (await Notifications.getExpoPushTokenAsync()).data;
 
     // Save token to backend
-    const jwtToken = await getToken();
-    if (jwtToken) {
-      await axios.post(
-        `${API_URL}/users/push-token`,
-        { token },
-        { headers: { Authorization: `Bearer ${jwtToken}` } }
+    if (token) {
+      await axiosInstance.post(
+        '/users/push-token',
+        { token }
       );
     }
 
