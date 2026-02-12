@@ -56,6 +56,12 @@ const ProfileScreen = ({ navigation }) => {
     }
   }, [user]);
 
+  // Reset image error state when profile picture changes (to force re-render)
+  useEffect(() => {
+    setImageError(false);
+    console.log('ProfileScreen: Profile picture changed, resetting image error state');
+  }, [user?.profilePicture]);
+
   const handlePickImage = async () => {
     // Show choice between camera and library
     const choose = await new Promise((resolve) => {
@@ -240,6 +246,7 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.profileImageContainer}>
             {user?.profilePicture && !imageError ? (
               <Image
+                key={`profile-${user.profilePicture}`}
                 source={{ uri: `${user.profilePicture}?t=${Date.now()}` }}
                 style={styles.profileImage}
                 onError={() => {

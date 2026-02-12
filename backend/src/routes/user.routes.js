@@ -49,7 +49,7 @@ router.get("/profile", authMiddleware, async (req, res) => {
 // UPDATE profile
 router.put("/profile", authMiddleware, async (req, res) => {
   try {
-    const { fullName, phone, bio, address, username, email, password, currentPassword } = req.body;
+    const { fullName, phone, bio, address, username, email, password, currentPassword, profilePicture } = req.body;
 
     const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: "User not found" });
@@ -87,11 +87,12 @@ router.put("/profile", authMiddleware, async (req, res) => {
       user.username = username;
     }
 
-    // Update other profile fields
+    // Update profile fields
     if (fullName !== undefined) user.fullName = fullName || undefined;
     if (phone !== undefined) user.phone = phone || undefined;
     if (bio !== undefined) user.bio = bio || undefined;
     if (address !== undefined) user.address = address || undefined;
+    if (profilePicture !== undefined) user.profilePicture = profilePicture || undefined;
 
     await user.save();
     
