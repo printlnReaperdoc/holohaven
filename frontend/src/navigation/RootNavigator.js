@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, createRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { useDispatch, useSelector } from 'react-redux';
 import * as SecureStore from 'expo-secure-store';
 import { TouchableOpacity, Text } from 'react-native';
+
+export const navigationRef = createRef();
 
 import { verifyToken } from '../redux/slices/authSlice';
 import { registerForPush } from '../notifications/push';
@@ -26,6 +28,7 @@ import PromotionsScreen from '../screens/promotions/PromotionsScreen';
 import PromotionDetailScreen from '../screens/promotions/PromotionDetailScreen';
 import AdminProductsScreen from '../screens/admin/AdminProductsScreen';
 import AdminTransactionsScreen from '../screens/admin/AdminTransactionsScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 
 const Stack = createStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -218,6 +221,31 @@ const PromotionsStack = () => (
   </Stack.Navigator>
 );
 
+// Notifications Stack
+const NotificationsStack = () => (
+  <Stack.Navigator
+    screenOptions={({ navigation }) => ({
+      headerShown: true,
+      headerTintColor: '#8B5CF6',
+      headerTitleStyle: { fontWeight: 'bold' },
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => navigation.toggleDrawer()}
+          style={{ paddingLeft: 16 }}
+        >
+          <Text style={{ fontSize: 24 }}>☰</Text>
+        </TouchableOpacity>
+      ),
+    })}
+  >
+    <Stack.Screen
+      name="NotificationsTab"
+      component={NotificationsScreen}
+      options={{ title: 'Notifications' }}
+    />
+  </Stack.Navigator>
+);
+
 // Admin Products Stack
 const AdminProductsStack = () => (
   <Stack.Navigator
@@ -294,6 +322,11 @@ const MainAppStack = () => {
           component={AdminTransactionsStack}
           options={{ drawerLabel: 'Transactions' }}
         />
+        <Drawer.Screen
+          name="ProfileDrawer"
+          component={ProfileStack}
+          options={{ drawerLabel: 'Profile' }}
+        />
       </Drawer.Navigator>
     );
   }
@@ -337,6 +370,11 @@ const MainAppStack = () => {
         component={PromotionsStack}
         options={{ drawerLabel: 'Promotions' }}
       />
+      <Drawer.Screen
+        name="NotificationsDrawer"
+        component={NotificationsStack}
+        options={{ drawerLabel: 'Notifications' }}
+      />
     </Drawer.Navigator>
   );
 };
@@ -371,7 +409,7 @@ const RootNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         screenOptions={{ headerShown: false, animationEnabled: false }}
       >

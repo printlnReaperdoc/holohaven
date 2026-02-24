@@ -8,6 +8,7 @@ const router = express.Router();
 // GET user's cart
 router.get("/", authMiddleware, async (req, res) => {
   try {
+    console.log(`[CART] Fetching cart for user ${req.userId}`);
     let cart = await Cart.findOne({ userId: req.userId }).populate(
       "items.productId"
     );
@@ -27,6 +28,7 @@ router.get("/", authMiddleware, async (req, res) => {
 router.post("/items", authMiddleware, async (req, res) => {
   try {
     const { productId, quantity } = req.body;
+    console.log(`[CART] Adding product ${productId} (qty: ${quantity}) for user ${req.userId}`);
 
     // Verify product exists
     const product = await Product.findById(productId);
@@ -96,6 +98,7 @@ router.patch("/items/:productId", authMiddleware, async (req, res) => {
 // REMOVE from cart
 router.delete("/items/:productId", authMiddleware, async (req, res) => {
   try {
+    console.log(`[CART] Removing product ${req.params.productId} for user ${req.userId}`);
     const cart = await Cart.findOne({ userId: req.userId });
     if (!cart) return res.sendStatus(404);
 
@@ -115,6 +118,7 @@ router.delete("/items/:productId", authMiddleware, async (req, res) => {
 // CLEAR cart
 router.delete("/", authMiddleware, async (req, res) => {
   try {
+    console.log(`[CART] Clearing cart for user ${req.userId}`);
     await Cart.deleteOne({ userId: req.userId });
     res.sendStatus(204);
   } catch (error) {

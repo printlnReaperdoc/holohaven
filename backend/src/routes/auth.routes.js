@@ -10,6 +10,7 @@ const router = express.Router();
 router.post("/register", async (req, res) => {
   try {
     const { email, username, password } = req.body;
+    console.log(`[AUTH] Register attempt: ${email} / ${username}`);
 
     // Check if user exists
     const existingUser = await User.findOne({
@@ -17,6 +18,7 @@ router.post("/register", async (req, res) => {
     });
 
     if (existingUser) {
+      console.log(`[AUTH] Register failed - email or username already exists: ${email}`);
       return res
         .status(400)
         .json({ error: "Email or username already exists" });
@@ -29,6 +31,7 @@ router.post("/register", async (req, res) => {
       passwordHash: hash,
     });
 
+    console.log(`[AUTH] User registered successfully: ${user.username} (${user._id})`);
     res.json({ 
       token: signToken(user._id), 
       userId: user._id,
@@ -41,6 +44,7 @@ router.post("/register", async (req, res) => {
       }
     });
   } catch (error) {
+    console.error(`[AUTH] Register error:`, error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -48,13 +52,21 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log(`[AUTH] Login attempt: ${email}`);
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    if (!user) {
+      console.log(`[AUTH] Login failed - user not found: ${email}`);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+    if (!ok) {
+      console.log(`[AUTH] Login failed - wrong password: ${email}`);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
+    console.log(`[AUTH] Login success: ${user.username} (${user._id}) isAdmin=${user.isAdmin}`);
     res.json({ 
       token: signToken(user._id), 
       userId: user._id,
@@ -67,6 +79,7 @@ router.post("/login", async (req, res) => {
       }
     });
   } catch (error) {
+    console.error(`[AUTH] Login error:`, error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -76,6 +89,7 @@ router.post("/google", async (req, res) => {
   try {
     const { googleId, email, fullName, profilePicture } = req.body;
 
+    console.log(`[AUTH] Google login attempt: ${email}`);
     let user = await User.findOne({
       $or: [{ googleId }, { email }],
     });
@@ -90,12 +104,16 @@ router.post("/google", async (req, res) => {
         profilePicture,
         username: email.split("@")[0] + Math.random().toString(36).substr(2, 9),
       });
+      console.log(`[AUTH] New Google user created: ${user.username} (${user._id})`);
     } else if (!user.googleId) {
       // Link Google account to existing user
       user.googleId = googleId;
       user.googleEmail = email;
       if (!user.profilePicture) user.profilePicture = profilePicture;
       await user.save();
+      console.log(`[AUTH] Google account linked to existing user: ${user.username}`);
+    } else {
+      console.log(`[AUTH] Google login for existing user: ${user.username}`);
     }
 
     res.json({ 

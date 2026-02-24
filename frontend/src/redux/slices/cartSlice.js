@@ -104,10 +104,7 @@ export const clearCart = createAsyncThunk(
   'cart/clearCart',
   async (_, { rejectWithValue }) => {
     try {
-      const token = await getToken();
-      await axios.delete(`${API_URL}/cart`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await axiosInstance.delete('/cart');
       // Clear from SQLite
       await clearCartFromSQLite();
     } catch (error) {

@@ -5,6 +5,7 @@ import Cart from "../models/Cart.js";
 import User from "../models/User.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 import { Expo } from "expo-server-sdk";
+import { saveOrderNotification } from "./notifications.routes.js";
 
 const router = express.Router();
 const expo = new Expo();
@@ -12,9 +13,11 @@ const expo = new Expo();
 // GET user's orders
 router.get("/", authMiddleware, async (req, res) => {
   try {
+    console.log(`[ORDER] Fetching orders for user ${req.userId}`);
     const orders = await Order.find({ userId: req.userId })
       .populate("items.productId")
       .sort({ createdAt: -1 });
+    console.log(`[ORDER] Found ${orders.length} orders`);
     res.json(orders);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -40,6 +43,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
 router.post("/checkout", authMiddleware, async (req, res) => {
   try {
     const { shippingAddress, paymentMethod, transactionId } = req.body;
+    console.log(`[ORDER] Checkout initiated by user ${req.userId}`);
 
     // Get user's cart
     const cart = await Cart.findOne({ userId: req.userId }).populate(
@@ -80,6 +84,7 @@ router.post("/checkout", authMiddleware, async (req, res) => {
     // Clear cart
     await Cart.deleteOne({ userId: req.userId });
 
+    console.log(`[ORDER] Order ${order._id} created with ${orderItems.length} items, total: $${totalPrice}`);
     res.status(201).json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -107,6 +112,10 @@ router.patch("/:id/status", authMiddleware, async (req, res) => {
     // Send push notification to user
     await sendOrderNotification(order, status);
 
+    // Save notification to DB for the order owner
+    await saveOrderNotification(order.userId, order._id, status);
+
+    console.log(`[ORDER] Status updated to "${status}" for order ${order._id}`);
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });

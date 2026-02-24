@@ -10,14 +10,14 @@ let API_URL;
 if (Platform.OS === 'android') {
   // Use actual PC IP address for more reliable connection
   // This works better than 10.0.2.2 which can be unreliable
-  API_URL = 'http://192.168.68.136:4000'; // Android emulator - use PC's actual IP
+  API_URL = 'http://10.0.2.2:4000'; // Android emulator - use PC's actual IP
 } else if (Platform.OS === 'ios') {
   API_URL = 'http://localhost:4000'; // iOS simulator
 } else if (Platform.OS === 'web') {
   API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000'; // Web
 } else {
   // Physical device or unknown platform
-  API_URL = process.env.REACT_APP_API_URL || 'http://192.168.68.136:4000';
+  API_URL = process.env.REACT_APP_API_URL || 'http://10.0.2.2:4000';
 }
 
 // Ensure URL doesn't have trailing slash

@@ -10,7 +10,8 @@ import {
   Alert,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { createOrder, clearCart } from '../../redux/slices/cartSlice';
+import { createOrder } from '../../redux/slices/ordersSlice';
+import { clearCart } from '../../redux/slices/cartSlice';
 
 const CheckoutScreen = ({ navigation }) => {
   const dispatch = useDispatch();
